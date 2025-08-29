@@ -9,11 +9,11 @@ from collections import defaultdict
 #         return ""
 #     return codecs.decode(s.encode("utf-8"), "latex")
 
-def latex_to_unicode(s: str) -> str:
-    if not s:
-        return ""
-    # Safe version: only remove braces, leave UTF-8 chars
-    return re.sub(r"[{}]", "", s)
+# def latex_to_unicode(s: str) -> str:
+#     if not s:
+#         return ""
+#     # Safe version: only remove braces, leave UTF-8 chars
+#     return re.sub(r"[{}]", "", s)
 
 def clean_braces(s: str) -> str:
     if not s:
@@ -35,52 +35,138 @@ def clean_braces(s: str) -> str:
 #         return ", ".join(formatted[:-1]) + " and " + formatted[-1]
 #     return formatted[0]
 
+# def format_authors_full(authors_str: str, bold_name="Li, Dongshuai") -> str:
+#     """
+#     Format authors as: Last, First Middle; ... ; and Last, First Middle
+#     Bold the target author (supports both full name and abbreviated form).
+#     """
+#     if not authors_str:
+#         return ""
+
+#     def normalize(author: str) -> str:
+#         """Convert to 'Last, First Middle' format."""
+#         author = author.strip()
+#         if "," in author:  # Already 'Last, First'
+#             last, first = [x.strip() for x in author.split(",", 1)]
+#         else:  # 'First Middle Last'
+#             parts = author.split()
+#             last, first = parts[-1], " ".join(parts[:-1])
+#         return f"{last}, {first}".strip()
+
+#     def is_bold_target(name: str, target: str) -> bool:
+#         """Check if name matches target (full or abbreviated)."""
+#         if name == target:
+#             return True
+#         # Compare initials version
+#         if "," in target:
+#             last, first = [x.strip() for x in target.split(",", 1)]
+#             initials = "".join([p[0] + "." for p in first.split() if p])
+#             short_form = f"{last}, {initials}"
+#             return name == short_form
+#         return False
+
+#     authors = [normalize(a) for a in authors_str.split(" and ")]
+
+#     # Bold if matches target (full or abbreviated)
+#     authors = [
+#         f"<strong>{a}</strong>" if is_bold_target(a, bold_name) else a
+#         for a in authors
+#     ]
+
+#     if len(authors) == 1:
+#         return authors[0]
+#     return "; ".join(authors[:-1]) + "; and " + authors[-1]
 def format_authors_full(authors_str: str, bold_name="Li, Dongshuai") -> str:
     """
     Format authors as: Last, First Middle; ... ; and Last, First Middle
-    Bold the target author.
+    Bold the target author (case-insensitive, supports full or abbreviated forms).
     """
-    authors = [a.strip() for a in authors_str.split(" and ")]
-    if len(authors) == 1:
-        return f"<strong>{authors[0]}</strong>" if authors[0] == bold_name else authors[0]
+    if not authors_str:
+        return ""
 
-    formatted = []
-    for a in authors[:-1]:
-        if "," in a:
-            last, first = [x.strip() for x in a.split(",", 1)]
-        else:
-            parts = a.split()
+    def normalize(author: str) -> str:
+        """Convert to 'Last, First Middle' format."""
+        author = author.strip()
+        if "," in author:  # Already 'Last, First'
+            last, first = [x.strip() for x in author.split(",", 1)]
+        else:  # 'First Middle Last'
+            parts = author.split()
             last, first = parts[-1], " ".join(parts[:-1])
-        name_str = f"{last}, {first}"
-        if name_str == bold_name:
-            name_str = f"<strong>{name_str}</strong>"
-        formatted.append(name_str)
+        return f"{last}, {first}".strip()
 
-    # Last author with 'and'
-    last = authors[-1]
-    if "," in last:
-        last_last, last_first = [x.strip() for x in last.split(",", 1)]
-    else:
-        parts = last.split()
-        last_last, last_first = parts[-1], " ".join(parts[:-1])
-    last_name_str = f"{last_last}, {last_first}"
-    if last_name_str == bold_name:
-        last_name_str = f"<strong>{last_name_str}</strong>"
-    formatted.append(f"and {last_name_str}")
+    def to_initials(name: str) -> str:
+        """Convert 'Last, First Middle' to 'Last, F. M.'"""
+        if "," not in name:
+            return name
+        last, first = [x.strip() for x in name.split(",", 1)]
+        initials = "".join([p[0] + "." for p in first.split() if p])
+        return f"{last}, {initials}"
 
-    # Join using semicolons
-    return "; ".join(formatted)
+    def is_bold_target(name: str, target: str) -> bool:
+        """Case-insensitive check: full name OR initials form."""
+        name_low = name.lower()
+        target_low = target.lower()
+        return (
+            name_low == target_low or
+            name_low == to_initials(target).lower() or
+            to_initials(name).lower() == target_low
+        )
 
+    authors = [normalize(a) for a in authors_str.split(" and ")]
+
+    # Bold target authors
+    authors = [
+        f"<strong>{a}</strong>" if is_bold_target(a, bold_name) else a
+        for a in authors
+    ]
+
+    if len(authors) == 1:
+        return authors[0]
+    return "; ".join(authors[:-1]) + "; and " + authors[-1]
+
+# def format_entry(entry):
+#     authors = format_authors_full(clean_braces(latex_to_unicode(entry.get("author", ""))))
+
+#     # Extract year only
+#     date_field = entry.get("date", "") or entry.get("year", "")
+#     year_match = re.search(r"\d{4}", date_field)
+#     year = year_match.group(0) if year_match else ""
+
+#     title = clean_braces(latex_to_unicode(entry.get("title", "")))
+#     journal = clean_braces(latex_to_unicode(entry.get("journaltitle", "")))
+#     volume = entry.get("volume", "")
+#     number = entry.get("number", "")
+#     pages = entry.get("pages", "")
+#     doi = entry.get("doi", "")
+
+#     # Start citation
+#     citation = f"{authors}, {year}. {title}. <em>{journal}</em>"
+
+#     # Add volume/number/pages without extra commas
+#     if volume:
+#         citation += f", {volume}"
+#         if number:
+#             citation += f"({number})"
+#     if pages:
+#         citation += f", {pages}"
+#     if doi:
+#         doi_url = doi
+#         if not doi.lower().startswith("http"):
+#             doi_url = f"https://doi.org/{doi}"
+#         citation += f", <a href='{doi_url}' target='_blank' class='text-blue-600 hover:underline'>{doi_url}</a>"
+
+#     # citation += "."
+#     return citation, year
 def format_entry(entry):
-    authors = format_authors_full(clean_braces(latex_to_unicode(entry.get("author", ""))))
+    authors = format_authors_full(clean_braces(entry.get("author", "")))
 
     # Extract year only
     date_field = entry.get("date", "") or entry.get("year", "")
     year_match = re.search(r"\d{4}", date_field)
     year = year_match.group(0) if year_match else ""
 
-    title = clean_braces(latex_to_unicode(entry.get("title", "")))
-    journal = clean_braces(latex_to_unicode(entry.get("journaltitle", "")))
+    title = clean_braces(entry.get("title", ""))
+    journal = clean_braces(entry.get("journaltitle", ""))
     volume = entry.get("volume", "")
     number = entry.get("number", "")
     pages = entry.get("pages", "")
@@ -97,16 +183,13 @@ def format_entry(entry):
     if pages:
         citation += f", {pages}"
     if doi:
-        doi_url = doi
-        if not doi.lower().startswith("http"):
-            doi_url = f"https://doi.org/{doi}"
+        doi_url = doi if doi.lower().startswith("http") else f"https://doi.org/{doi}"
         citation += f", <a href='{doi_url}' target='_blank' class='text-blue-600 hover:underline'>{doi_url}</a>"
 
-    # citation += "."
     return citation, year
 
 # --- Load BibTeX ---
-with open("publications.bib") as bibtex_file:
+with open("publication_upto_20250829.bib") as bibtex_file:
     bib_database = bibtexparser.load(bibtex_file)
 
 # --- Group entries by year ---
